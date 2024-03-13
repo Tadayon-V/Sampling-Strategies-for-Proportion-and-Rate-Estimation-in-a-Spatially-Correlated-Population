@@ -1,0 +1,15 @@
+# Title: Design-Based and Model-Based Sampling Strategies for Proportion and Rate Estimation in a Spatially Correlated Population
+
+# Author: Vahid Tadayon and Mahmoud Torabi
+
+# Software: R version 3.6.3
+
+
+# The txt files called:
+#     “TBR estimate in population”
+# produces the result of Table 8 and Figure 9, and the txt file called:
+#                       “TBR DSAE”
+# produces the result of Table 9 and Figure 10.
+
+
+# The data file needed to run the R code above is “Georgia Teen Birth Rate.xlsx”
