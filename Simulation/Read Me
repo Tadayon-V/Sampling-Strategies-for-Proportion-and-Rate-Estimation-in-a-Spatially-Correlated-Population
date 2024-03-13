@@ -1,0 +1,7 @@
+# Title: Design-Based and Model-Based Sampling Strategies for Proportion and Rate Estimation in a Spatially Correlated Population
+
+# Author: Vahid Tadayon and Mahmoud Torabi
+
+# Software: R version 3.6.3
+
+# The text files called “Population Proportion.txt”, “Proportion Estimation - RSS vs. DUST.txt” and “Proportion - SAE.txt” provide the codes for the “Simulation Study on Proportion Estimation” section. Similarly, the text files called “Rate Estimation.txt” and “Rate Estimation - SAE.txt” are used to produce the result in “Simulation Study on Rate  Estimation” section.
