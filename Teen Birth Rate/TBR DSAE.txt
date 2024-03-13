@@ -1,0 +1,344 @@
+rm(list = ls())
+# library(spgwr)
+# data(georgia)
+# Georg <- gSRDF
+
+
+
+library(sp)
+library(rgdal)
+Georg <- readOGR(dsn='Georgia-new.csv')
+# Georg <- readOGR(dsn='Georgia-new.csv')
+
+
+plot(Georg)
+# View(Georg); class(Georg)
+# pts <- spsample(gSRDF, n=159, type="random")
+library(geosphere)
+pts <- centroid(Georg)
+points(pts, pch = 21, bg = "gray", col = "black")
+names(Georg)
+Georg$NAME10; length(Georg$NAME10); Georg$NAME10[1]
+
+
+
+mydata <- read.csv('Georgia-new.csv')
+# mydata <- read.csv('Georgia-new.csv')
+names(mydata) <- c("County", "Population","TBR",
+                   "Uninsured","Unemployed","Sin.Par.Hous",
+                   "Med.Hous.Inc","below18",
+                   "Af.Am","Hispanic","Female",
+                   "Rural","Hi.Sch.Gra.R",
+                   "Discon.Youth","Popu.F.18")
+dim(mydata); head(mydata)
+
+
+SES.data <- matrix(0,nrow=159, ncol=4)
+SES.data[,1] <- mydata$Med.Hous.Inc
+SES.data[,2] <- mydata$Hi.Sch.Gra.R
+SES.data[,3] <- mydata$Unemployed
+SES.data[,4] <- mydata$Sin.Par.Hous
+head(SES.data)
+
+SES <- as.vector( factanal(x=SES.data, factors=1, scores="Bartlett")$scores )
+
+
+
+# # pc.col <- c(4,5,6,7,9,12,13)
+# col <- c(1,2,3,8,10,11,14,15)
+# head(mydata[-col])
+# pca.TBR<-prcomp(mydata[-col])
+# 
+# summary(pca.TBR)
+# plot(pca.TBR)
+# biplot(pca.TBR)
+# biplot(pca.TBR,choices=1:2)
+# biplot(pca.TBR,choices=2:3)
+# biplot(pca.TBR,choices=3:4)
+# biplot(pca.TBR,choices=4:5)
+# biplot(pca.TBR,choices=5:6)
+# biplot(pca.TBR,choices=6:7)
+# 
+# pca.TBR$sdev
+# pca.TBR$rotation
+# normalpca<-prcomp(mydata[-col],scale=T)
+# prcomp(mydata[-col],tol=0.5)
+
+
+
+
+
+
+# Georg$TBRP1000 <- mydata$TBRp1000
+# Georg$Uninsured <- mydata$Uninsured
+# Georg$Unemployed <- mydata$Unemployed
+# Georg$SinglePH <- mydata$Single.Parent.Households
+# Georg$MedianHIncome <- mydata$Median.Household.Income
+# Georg$below18 <- mydata$below18
+# Georg$AfricanAm <- mydata$African.American
+# Georg$Hispanic <- mydata$Hispanic
+# Georg$Female <- mydata$Female
+# Georg$Rural <- mydata$Rural
+# Georg$HighSGR <- mydata$High.School.Graduation.Rate
+# Georg$DisconnectedY <- mydata$Disconnected.Youth
+# Georg$TBR <- mydata$TBR
+# 
+
+
+
+
+#=================================NORMMH
+### Computing of the norm matrix: |h|
+NORMMH <- function(coordinate){
+  NMH <- as.matrix(dist(coordinate))
+  return(NMH)
+}
+normmatrix <- NORMMH(pts)
+class(normmatrix); dim(normmatrix)
+
+expocorr <- function(normmatrix, rho){
+  M <- exp(-(normmatrix/rho))
+  c <- c(min(M[lower.tri(M)][order(-row(M)[lower.tri(row(M))])]),
+         max(M[lower.tri(M)][order(-row(M)[lower.tri(row(M))])]))
+  return(c)
+}
+expocorr(normmatrix,4)
+
+
+
+
+
+#=================================Distance between centroids
+library(spatstat)
+centroids <- pts
+
+dist.centr <- crossdist(centroids[,1], centroids[,2],
+                        centroids[,1], centroids[,2])
+class(dist.centr); dim(dist.centr); #diag(dist.centr)
+
+
+ar.cnt <- function(unit){
+  areal <- pts.df[frst.unt,1]
+  center <- count.da[areal,1:2]
+  return(center)
+}
+
+
+
+
+
+
+
+
+
+#================================= gender & age-group for each area
+TBR <- mydata$TBR
+MedianHouseholdIncome <- mydata$Median.Household.Income
+Hispanic <- mydata$Hispanic
+AfricanAmerican <- mydata$Af.Am
+Population <- mydata$Population
+Uninsured <- mydata$Uninsured
+
+
+
+
+
+
+
+
+
+
+
+
+library(geoR)
+library(sp)
+library(rjags)
+library(rgeos)
+library(rgdal)
+
+
+st.date <- date()
+
+#================================= Test Loop of Simulation
+R = 80
+n.dust = 6
+beta0 <- c()
+beta1 <- c()
+beta2 <- c()
+beta3 <- c()
+sig2 <- c()
+
+
+Ara.Z <- matrix(0, nrow=R, ncol=159)
+
+
+#  i=1
+
+
+
+Lambda <- mydata$TBR/mydata$Population
+# plot(density(Lambda)) ; mean(Lambda) ; mean(Lambda)/N
+
+
+
+
+# # #=====================================The Loop
+# # #   ##################################################################
+# # # 
+# # #   ##################################################################
+# # #   #--------------------------neighbor district
+# # #   #--------------------------neighbor district
+# # #   Omega <- gTouches(Georg, byid=TRUE)
+# # #   Omega <- 1*Omega
+# # #   #------------indices of non zero elements
+# # #   # which(Omega!=0, arr.ind=T)
+# # #   denominator <- sqrt(var(Lambda))*8/9
+# # #   #denominator <- (1/9)*sum((districts.mean-mean(districts.mean))^2)
+# # #   S.sum <- 0
+# # #   for(k in 1:9){
+# # #     for(l in 1:9){
+# # #       if(k!=l){
+# # #         S.sum <- S.sum +
+# # #           (Omega[k,l]+sample(c(0,1),size=1))*(Lambda[k]-mean(Lambda))*
+# # #           ((Lambda[l]-mean(Lambda)))
+# # #       }
+# # #     }
+# # #   }
+# # #   numerator <- S.sum/sum(Omega)
+# # #   auto.corr <- abs(numerator/denominator)/30#;auto.corr
+# # #   ##################################################################
+# # #   #=================================Dependent Unit Sequential Technique
+# # #   frst.unt <- sample(x=c(1:159), 1)
+# # #   frst.areal <- frst.unt
+# # #   frst.cntr <- pts[frst.unt,]
+# # #   sampled <- c(frst.areal)
+# # #   CTR <- 2
+# # #   while(length(unique(sampled)) < n.dust){
+# # #     cntrdis <- crossdist(
+# # #       pts[sampled[CTR-1],1],
+# # #       pts[sampled[CTR-1],2],
+# # #       pts[,1], pts[,2]
+# # #     )
+# # #     # dim(cntrdis)
+# # #     cntrdis <- as.vector(cntrdis)
+# # #     ###
+# # #     sampled[CTR] <- order(cntrdis)[150-CTR]
+# # #     # as.numeric(as.character(names(divi.pts)))
+# # #     ###
+# # #     CTR  <- CTR + 1
+# # #   }
+# # #   # sum(1*duplicated(sampled))
+# # #   sampled <- unique(sampled)
+# # #   ##################################################################
+# # #   ##################################################################
+# # #   #################                                #################
+# # #   #################      Small Area Estimation     #################
+# # #   #################                                #################
+# # #   ##################################################################
+# # #   ##################################################################
+# # #   model.inits <- list( beta0=runif(1,0.8,1.2),
+# # #                        beta1=runif(1,0.8,1.2), #SES
+# # #                        beta2=runif(1,0.8,1.2), #AfAm
+# # #                        beta3=runif(1,0.8,1.2), #Uninsured
+# # #                        sig2=runif(1,0.8,1.2) )
+# # #   iterations <- 1000
+# # #   burnin <- floor(iterations/2)
+# # #   chains <- 2
+# # #   
+# # #   logistic_model <- "model{
+# # #         ######likelihood
+# # #         for (areal in 1:159) {
+# # #           Z[areal] ~ dpois( Population[areal]*Lambda[areal] ) 
+# # #           eta[areal] ~ dnorm( (beta0 +
+# # #                                 beta1*x1[areal] +
+# # #                                 beta2*x2[areal]  +
+# # #                                 beta3*x3[areal] ), sig2)
+# # #           logit( Lambda[areal] ) <- eta[areal]
+# # #         }
+# # #         #######priors
+# # #         sig2 ~ dgamma(0.01, 0.01)
+# # #         beta0 ~ dnorm(0.0,0.001)
+# # #         beta1 ~ dnorm(0.0,0.001)
+# # #         beta2 ~ dnorm(0.0,0.001)
+# # #         beta3 ~ dnorm(0.0,0.001)
+# # #     }"
+# # #   
+# # #   model.fit <- jags.model(textConnection(logistic_model),
+# # #                           data=list(Z=ceiling(TBR),
+# # #                                     x1=SES,
+# # #                                     x2=AfricanAmerican,
+# # #                                     x3=Uninsured,
+# # #                                     #Lambda=Lambda,
+# # #                                     Population=Population),
+# # #                           #inits=model.inits, 
+# # #                           n.chains = chains)
+# # #   
+# # #   model.samples <- coda.samples(model.fit,
+# # #                                 c("beta0", "beta1", "beta2","beta3",
+# # #                                   "sig2", "Z"),
+# # #                                 n.iter=iterations)
+# # #   # summary(model.samples)[1]
+# # #   
+# # #   
+# # #   beta0[i] <-  summary(model.samples)$statistics[159+1,1]
+# # #   beta1[i] <-  summary(model.samples)$statistics[159+2,1]
+# # #   beta2[i] <-  summary(model.samples)$statistics[159+3,1]
+# # #   beta3[i] <-  summary(model.samples)$statistics[159+4,1]
+# # #   sig2[i] <-    summary(model.samples)$statistics[159+5,1]
+# # #   Ara.Z[i,] <- t(summary(model.samples)$statistics[1:159,1])
+# # #   
+# # #   # summary(window(model.samples, start = burnin))
+# # #   # plot(model.samples, trace=FALSE, density = TRUE)
+# # #   #================================= Print R
+# # #   print(i)
+# # 
+# 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# save.image()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

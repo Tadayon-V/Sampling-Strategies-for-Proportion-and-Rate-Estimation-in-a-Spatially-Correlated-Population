@@ -1,0 +1,193 @@
+rm(list = ls())
+# library(spgwr)
+# data(georgia)
+# Georg <- gSRDF
+
+
+
+library(sp)
+library(rgdal)
+Georg <- readOGR(dsn='C:/Users/DR.TADAYON/Dropbox/R Code/Counties_Georgia')
+
+
+plot(Georg)
+# View(Georg); class(Georg)
+# pts <- spsample(gSRDF, n=159, type="random")
+library(geosphere)
+pts <- centroid(Georg)
+points(pts, pch = 21, bg = "gray", col = "black")
+names(Georg)
+Georg$NAME10; length(Georg$NAME10); Georg$NAME10[1]
+
+mydata <- read.csv('C:/Users/DR.TADAYON/Dropbox/R Code/Georgia-new.csv')
+mydata$TBR <- (mydata$TBRp1000*mydata$Population)/1000
+names(mydata) <- c("County", "Population","TBRp1000",
+                   "Uninsured","Unemployed","Single.Parent.Households",
+                   "Median.Household.Income","below18",
+                   "African.American","Hispanic","Female",
+                   "Rural","High.School.Graduation.Rate",
+                   "Disconnected.Youth","TBR")
+dim(mydata); head(mydata)
+
+
+Georg$TBRP1000 <- mydata$TBRp1000
+Georg$Uninsured <- mydata$Uninsured
+Georg$Unemployed <- mydata$Unemployed
+Georg$SinglePH <- mydata$Single.Parent.Households
+Georg$MedianHIncome <- mydata$Median.Household.Income
+Georg$below18 <- mydata$below18
+Georg$AfricanAm <- mydata$African.American
+Georg$Hispanic <- mydata$Hispanic
+Georg$Female <- mydata$Female
+Georg$Rural <- mydata$Rural
+Georg$HighSGR <- mydata$High.School.Graduation.Rate
+Georg$DisconnectedY <- mydata$Disconnected.Youth
+Georg$TBR <- mydata$TBR
+
+
+
+
+
+#=================================NORMMH
+### Computing of the norm matrix: |h|
+NORMMH <- function(coordinate){
+  NMH <- as.matrix(dist(coordinate))
+  return(NMH)
+}
+normmatrix <- NORMMH(pts)
+class(normmatrix); dim(normmatrix)
+
+expocorr <- function(normmatrix, rho){
+  M <- exp(-(normmatrix/rho))
+  c <- c(min(M[lower.tri(M)][order(-row(M)[lower.tri(row(M))])]),
+         max(M[lower.tri(M)][order(-row(M)[lower.tri(row(M))])]))
+  return(c)
+}
+expocorr(normmatrix,4)
+
+
+
+
+
+#=================================Distance between centroids
+library(spatstat)
+centroids <- pts
+
+dist.centr <- crossdist(centroids[,1], centroids[,2],
+                        centroids[,1], centroids[,2])
+class(dist.centr); dim(dist.centr); #diag(dist.centr)
+
+
+ar.cnt <- function(unit){
+  areal <- pts.df[frst.unt,1]
+  center <- count.da[areal,1:2]
+  return(center)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+library(geoR)
+library(sp)
+library(rjags)
+library(rgeos)
+library(rgdal)
+
+
+st.date <- date()
+
+#================================= Test Loop of Simulation
+
+
+#  i=1 
+
+
+
+Z <- mydata$TBR/mydata$Population
+# plot(density(Z)) ; mean(Z) ; mean(Z)/N
+
+
+
+# # # #================================ The Loop
+# # #   ##################################################################
+# # #   #--------------------------neighbor district
+# # #   Omega <- gTouches(Georg, byid=TRUE)
+# # #   Omega <- 1*Omega
+# # #   #------------indices of non zero elements
+# # #   # which(Omega!=0, arr.ind=T)
+# # #   denominator <- sqrt(var(Z))*8/9
+# # #   #denominator <- (1/9)*sum((districts.mean-mean(districts.mean))^2)
+# # #   S.sum <- 0
+# # #   for(k in 1:9){
+# # #     for(l in 1:9){
+# # #       if(k!=l){
+# # #         S.sum <- S.sum +
+# # #           (Omega[k,l]+sample(c(0,1),size=1))*(Z[k]-mean(Z))*
+# # #           ((Z[l]-mean(Z)))
+# # #       }
+# # #     }
+# # #   }
+# # #   numerator <- S.sum/sum(Omega)
+# # #   auto.corr <- abs(numerator/denominator)/30#;auto.corr
+# # #   #######################################################################
+# # #   #=================================Dependent Unit Sequential Technique
+# # #   frst.unt <- sample(x=c(1:159), 1)
+# # #   frst.areal <- frst.unt
+# # #   frst.cntr <- pts[frst.unt,]
+# # #   sampled <- c(frst.areal)
+# # #   CTR <- 2
+# # #   while(length(unique(sampled)) < n.dust){
+# # #     cntrdis <- crossdist(
+# # #       pts[sampled[CTR-1],1],
+# # #       pts[sampled[CTR-1],2],
+# # #       pts[,1], pts[,2]
+# # #     )
+# # #     # dim(cntrdis)
+# # #     cntrdis <- as.vector(cntrdis)
+# # #     ###
+# # #     sampled[CTR] <- order(cntrdis)[150-CTR]
+# # #     # as.numeric(as.character(names(divi.pts)))
+# # #     ###
+# # #     CTR  <- CTR + 1
+# # #   }
+# # #   # sum(1*duplicated(sampled))
+# # #   sampled <- unique(sampled)
+# # #   ###############################################################################################################################
+# # #   ##################################################################
+# # #   #================================= DUST Estimation
+# # #   # dust.list <- list()
+# # #   # for (shom  in sampled){
+# # #   #   # print(shom)
+# # #   #   dust.list[[shom]] <- divi.pts[[shom]][,4:(3+R)]
+# # #   # }
+# # #   # dust.list <- Filter(Negate(is.null), dust.list)
+# # #   # dust.samp <- Reduce(c, dust.list)
+# # #   # m.dust.samp[i] <- mean(dust.samp) # + runif(1,-0.04,(pr-mean(dust.samp)))
+# # #   m.dust.samp[i] <- mean(Z[sampled])#;m.dust.samp
+# # #   ##################################################################
+# # #   #================================= SRS Estimation
+# # #   rand <- sample(1:150, 15)
+# # #   m.srs.samp[i] <- mean(Z[rand])#;m.srs.samp
+# # #   ##################################################################
+# # #   #================================= Print R
+# # #   print(i)
+# # # 
+# #
+# 
+
