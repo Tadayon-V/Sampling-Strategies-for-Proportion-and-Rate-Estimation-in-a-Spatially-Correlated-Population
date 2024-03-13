@@ -1,0 +1,337 @@
+rm(list = ls())
+library(ggplot2)
+library(ggthemes)
+library(raster)
+N <- 500
+
+
+
+
+set.seed(11)
+#============================= Make a raster
+My.area = raster(xmn=0, ymn=0, xmx=10, ymx=10, res=1)
+
+My.area[] <- 0
+pts <- spsample(as(extent(My.area), 'SpatialPolygons'), N, 'random')
+tab <- table(cellFromXY(My.area, pts))
+My.area[as.numeric(names(tab))] <- tab
+
+# x11()
+plot(My.area, col=gray.colors(9, start=0.9, end=0.3),
+     cex.axis=1.5, cex.lab=2,
+     #col=heat.colors(9, alpha=0.9, rev=TRUE),
+     xlab="x" , ylab="y", legend.only=FALSE,
+     legend.width=1, legend.shrink=0.8,
+     legend.args=list(text='Count', side=4, font=2, line=2.5, cex=1),
+     axis.args=list(cex.axis=1.2))
+points(pts, pch=20)
+
+
+count.da <- data.frame("cntr"=coordinates(My.area),
+                       "count"=My.area[])
+head(count.da); dim(count.da)
+
+
+
+pts.df <- data.frame(pts)
+#View(pts.df)
+names(pts.df) <- c("x","y")
+head(pts.df); dim(pts.df)
+
+pts.df <- cbind(extract(My.area, pts.df, cellnumbers=T),pts.df)
+head(pts.df); dim(pts.df)
+
+drops <- c("ID","layer")
+pts.df <- pts.df[ , !(names(pts.df) %in% drops)]
+head(pts.df); dim(pts.df)
+
+
+
+
+
+
+#=================================NORMMH
+### Computing of the norm matrix: |h|
+NORMMH <- function(coordinate){
+  NMH <- as.matrix(dist(coordinate))
+  return(NMH)
+}
+normmatrix <- NORMMH(coordinates(pts))
+class(normmatrix); dim(normmatrix)
+
+expocorr <- function(normmatrix, rho){
+  M <- exp(-(normmatrix/rho))
+  c <- c(min(M[lower.tri(M)][order(-row(M)[lower.tri(row(M))])]),
+         max(M[lower.tri(M)][order(-row(M)[lower.tri(row(M))])]))
+  return(c)
+}
+expocorr(normmatrix,4)
+
+
+
+
+
+
+
+
+
+
+#=================================Auto-Correlation
+library(rgeos)
+library(rgdal)
+shape <- rasterToPolygons(My.area, dissolve=F)
+
+
+
+#=================================Distance between centroids
+library(spatstat)
+centroids <- count.da[,1:2]
+
+# x11()
+plot(My.area, col=gray.colors(9, start=0.9, end=0.3),
+     cex.axis=1.5, cex.lab=2,
+     #col=heat.colors(9, alpha=0.9, rev=TRUE),
+     xlab="x" , ylab="y", legend.only=FALSE,
+     legend.width=1, legend.shrink=0.8,
+     legend.args=list(text='Count', side=4, font=2, line=2.5, cex=1),
+     axis.args=list(cex.axis=1.2))
+points(centroids,pch=19)
+
+dist.centr <- crossdist(centroids$cntr.x, centroids$cntr.y,
+                        centroids$cntr.x, centroids$cntr.y)
+class(dist.centr); dim(dist.centr); #diag(dist.centr)
+
+
+ar.cnt <- function(unit){
+  areal <- pts.df[frst.unt,1]
+  center <- count.da[areal,1:2]
+  return(center)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#================================= gender & age-group for each area
+age.mean <- c()
+gend.mean <- c()
+for(ar in 1:100){
+  age.mean[ar] <- runif(1,1,4)
+  #mean(
+  #sample(1:4, prob=c(0.1,0.15,0.5,0.25), N, replace=T) ) 
+  gend.mean[ar] <- runif(1,0,1)
+  #mean(
+  #sample(0:1, prob=c(0.4,0.6), N, replace=T) )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+library(geoR)
+library(sp)
+library(rjags)
+
+
+st.date <- date()
+
+#================================= Test Loop of Simulation
+
+
+
+
+
+
+
+x.norm <- rnorm(N,2,1)
+V <- grf(n=N, cov.model="exponential", cov.pars=c(0.1, 3),
+         grid=coordinates(pts), mean=1+0.5*x.norm)
+expV <- exp(V$data)
+Z <- rpois(n=N, lambda=expV)
+# plot(density(Z)) ; mean(Z) ; mean(Z)/N
+
+###
+pts.df[,4] <- Z
+
+# # # #======================= The Loop
+# # # 
+# # #   ##################################################################
+# # #   #--------------------------divide districts
+# # #   divi.pts <- by(pts.df, pts.df$cells, function(unique) unique)
+# # #   distr.samp <- list()
+# # #   districts.mean <- c(0)
+# # #   for (j in 1:length(divi.pts)){   # ==> number of non-empty cellls
+# # #     distr.samp[[j]] <- as.vector(as.matrix(divi.pts[[j]][,(4)]))
+# # #     districts.mean[j] <- mean(distr.samp[[j]])
+# # #   }
+# # #   ##################################################################
+# # #   #--------------------------neighbor district
+# # #   Omega <- gTouches(shape, byid=TRUE)
+# # #   Omega <- 1*Omega
+# # #   #------------indices of non zero elements
+# # #   # which(Omega!=0, arr.ind=T)
+# # #   denominator <- var(districts.mean)*8/9
+# # #   #denominator <- (1/9)*sum((districts.mean-mean(districts.mean))^2)
+# # #   S.sum <- 0
+# # #   for(k in 1:9){
+# # #     for(l in 1:9){
+# # #       if(k!=l){
+# # #         S.sum <- S.sum +
+# # #           Omega[k,l]*(districts.mean[k]-mean(districts.mean))*
+# # #           ((districts.mean[l]-mean(districts.mean)))
+# # #       }
+# # #     }
+# # #   }
+# # #   numerator <- S.sum/sum(Omega)
+# # #   auto.corr <- abs(numerator/denominator)
+# # #   ##################################################################
+# # #   #=================================Dependent Unit Sequential Technique
+# # #   frst.unt <- sample(x=c(1:N), 1)
+# # #   frst.areal <- pts.df[frst.unt,1]
+# # #   frst.cntr <- ar.cnt(frst.unt)
+# # #   sampled <- c(frst.areal)
+# # #   CTR <- 2
+# # #   while(length(unique(sampled)) < n.dust){
+# # #     cntrdis <- crossdist(
+# # #       count.da[sampled[CTR-1],]$cntr.x,
+# # #       count.da[sampled[CTR-1],]$cntr.y,
+# # #       count.da1$cntr.x, count.da1$cntr.y
+# # #     )
+# # #     # dim(cntrdis)
+# # #     cntrdis <- as.vector(cntrdis)
+# # #     ###
+# # #     sampled[CTR] <- order(cntrdis)[length(divi.pts)-CTR]
+# # #     # as.numeric(as.character(names(divi.pts)))
+# # #     ###
+# # #     CTR  <- CTR + 1
+# # #   }
+# # #   # sum(1*duplicated(sampled))
+# # #   sampled <- unique(sampled)
+# # #   ##################################################################
+# # #   ##################################################################
+# # #   #################                                #################
+# # #   #################      Small Area Estimation     #################
+# # #   #################                                #################
+# # #   ##################################################################
+# # #   ##################################################################
+# # #   model.inits <- list( beta1=runif(1,0.8,1.2),
+# # #                        beta2=runif(1,0.8,1.2),
+# # #                        sig2=runif(1,0.8,1.2) )
+# # #   iterations <- 1000
+# # #   burnin <- floor(iterations/2)
+# # #   chains <- 2
+# # #   yy <- c()
+# # #   yl <- c()
+# # #   for(kk in 1:length(divi.pts)){
+# # #     yy[kk] <- mean(distr.samp[[kk]])/N
+# # #     yl[kk] <- length(distr.samp[[kk]])
+# # #   }
+# # #   
+# # #   
+# # #   logistic_model <- "model{
+# # #         ######likelihood
+# # #         for (areal in 1:nn) {
+# # #           Ara.r[areal] ~ dpois( (yy[areal]*yl[areal]) ) 
+# # #           eta[areal] ~ dnorm( (beta1*x1[areal] + beta2*x2[areal]), sig2)
+# # #           logit( yy[areal] ) <- eta[areal]
+# # #         }
+# # #         #######priors
+# # #         sig2 ~ dgamma(0.01, 0.01)
+# # #         beta1 ~ dnorm(0.0,0.001)
+# # #         beta2 ~ dnorm(0.0,0.001)
+# # #     }"
+# # #   
+# # #   model.fit <- jags.model(textConnection(logistic_model),
+# # #                           data=list(Ara.r=ceiling(yy*N), yl=yl, 
+# # #                                     nn=length(divi.pts),
+# # #                                     x1=age.mean[1:length(divi.pts)],
+# # #                                     x2=gend.mean[1:length(divi.pts)]),
+# # #                           #inits=model.inits, 
+# # #                           n.chains = chains)
+# # #   
+# # #   model.samples <- coda.samples(model.fit,
+# # #                                 c("beta1", "beta2", "sig2", "Ara.r"),
+# # #                                 n.iter=iterations)
+# # #   # summary(model.samples)[1]
+# # #   
+# # #   
+# # #   beta1[i] <-  summary(model.samples)$statistics[length(divi.pts)+1,1]
+# # #   beta2[i] <-  summary(model.samples)$statistics[length(divi.pts)+2,1]
+# # #   sig2[i] <-    summary(model.samples)$statistics[length(divi.pts)+3,1]
+# # #   Ara.r[i,] <- t(summary(model.samples)$statistics[1:length(divi.pts),1])
+# # #   
+# # #   # summary(window(model.samples, start = burnin))
+# # #   # plot(model.samples, trace=FALSE, density = TRUE)
+# # #   #================================= Print R
+# # #   print(i)
+# # 
+# 
+
+
+
+
+
+en.date <- date()
+
+
+
+
+
+st.date
+en.date
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,318 @@
+rm(list = ls())
+library(ggplot2)
+library(ggthemes)
+library(raster)
+library(RSSampling)
+
+
+
+
+set.seed(11)
+#============================= Make a raster
+My.area = raster(xmn=0, ymn=0, xmx=10, ymx=10, res=1)
+
+My.area[] <- 0
+pts <- spsample(as(extent(My.area), 'SpatialPolygons'), 3500, 'random')
+tab <- table(cellFromXY(My.area, pts))
+My.area[as.numeric(names(tab))] <- tab
+
+#x11()
+plot(My.area, col=gray.colors(9, start=0.9, end=0.3),
+     cex.axis=1.5, cex.lab=2,
+     #col=heat.colors(9, alpha=0.9, rev=TRUE),
+     xlab="x" , ylab="y", legend.only=FALSE,
+     legend.width=1, legend.shrink=0.8,
+     legend.args=list(text='Count', side=4, font=2, line=2.5, cex=1),
+     axis.args=list(cex.axis=1.2))
+points(pts, pch=20,cex=0.3)
+
+
+count.da <- data.frame("cntr"=coordinates(My.area),
+                       "count"=My.area[])
+head(count.da); dim(count.da)
+
+
+
+pts.df <- data.frame(pts)
+#View(pts.df)
+names(pts.df) <- c("x","y")
+head(pts.df); dim(pts.df)
+
+pts.df <- cbind(extract(My.area, pts.df, cellnumbers=T),pts.df)
+head(pts.df); dim(pts.df)
+
+drops <- c("ID","layer")
+pts.df <- pts.df[ , !(names(pts.df) %in% drops)]
+head(pts.df); dim(pts.df)
+
+
+
+
+
+
+#=================================NORMMH
+### Computing of the norm matrix: |h|
+NORMMH <- function(coordinate){
+  NMH <- as.matrix(dist(coordinate))
+  return(NMH)
+}
+normmatrix <- NORMMH(coordinates(pts))
+class(normmatrix); dim(normmatrix)
+
+expocorr <- function(normmatrix, rho){
+  M <- exp(-(normmatrix/rho))
+  c <- c(min(M[lower.tri(M)][order(-row(M)[lower.tri(row(M))])]),
+         max(M[lower.tri(M)][order(-row(M)[lower.tri(row(M))])]))
+  return(c)
+}
+expocorr(normmatrix,4)
+
+
+
+
+
+
+
+#=================================Simulating Spatial data
+library(geoR)
+library(sp)
+Z.generate <- function(p,U,V){
+  Z <- V
+  for(i in 1:length(U)){
+    if(U[i] < p){
+      Z$data[i] <- 1
+    }else{
+      Z$data[i] <- 0
+    }
+  }
+  return(Z)
+}
+
+
+
+#=================================Auto-Correlation
+library(rgeos)
+library(rgdal)
+shape <- rasterToPolygons(My.area, dissolve=F)
+
+
+
+#=================================Distance between centroids
+library(spatstat)
+centroids <- count.da[,1:2]
+
+# x11()
+plot(My.area, col=gray.colors(9, start=0.9, end=0.3),
+     cex.axis=1.5, cex.lab=2,
+     #col=heat.colors(9, alpha=0.9, rev=TRUE),
+     xlab="x" , ylab="y", legend.only=FALSE,
+     legend.width=1, legend.shrink=0.8,
+     legend.args=list(text='Count', side=4, font=2, line=2.5, cex=1),
+     axis.args=list(cex.axis=1.2))
+points(centroids,pch=19)
+
+dist.centr <- crossdist(centroids$cntr.x, centroids$cntr.y,
+                        centroids$cntr.x, centroids$cntr.y)
+class(dist.centr); dim(dist.centr); #diag(dist.centr)
+
+
+ar.cnt <- function(unit){
+  areal <- pts.df[frst.unt,1]
+  center <- count.da[areal,1:2]
+  return(center)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+st.date <- date()
+
+#================================= Test Loop of Simulation
+
+
+
+
+
+
+
+
+
+x.norm <- rnorm(3500)
+V <- grf(n=3500, cov.model="exponential", cov.pars=c(0.1, 3),
+         grid=coordinates(pts), mean=1+0.5*x.norm)
+U <- pnorm(V$data, mean=mean(V$data), sd=sd(V$data),
+           lower.tail=TRUE, log.p=FALSE)
+###
+Z <- Z.generate(pr,U,V)
+###
+
+
+# # # #======================= The Loop
+# # #   #================================= Making Covariates for RSS
+# # #   pts.df[,4] <- rbinom(3500,1,0.5)
+# # #   pts.df[,5] <- sample(1:4, 3500, replace=T)
+# # #   pts.df[,5+i] <- Z$data
+# # #   ##################################################################
+# # #   #--------------------------divide districts
+# # #   divi.pts <- by(pts.df, pts.df$cells, function(unique) unique)
+# # #   distr.samp <- list()
+# # #   districts.prop <- c(0)
+# # #   for (j in 1:100){
+# # #     distr.samp[[j]] <- as.vector(as.matrix(divi.pts[[j]][,(5+i)]))
+# # #     districts.prop[j] <- mean(distr.samp[[j]])
+# # #   }
+# # #   ##################################################################
+# # #   #--------------------------neighbor district
+# # #   Omega <- gTouches(shape, byid=TRUE)
+# # #   Omega <- 1*Omega
+# # #   #------------indices of non zero elements
+# # #   # which(Omega!=0, arr.ind=T)
+# # #   denominator <- var(districts.prop)*8/9
+# # #   #denominator <- (1/9)*sum((districts.prop-mean(districts.prop))^2)
+# # #   S.sum <- 0
+# # #   for(k in 1:9){
+# # #     for(l in 1:9){
+# # #       if(k!=l){
+# # #         S.sum <- S.sum +
+# # #           Omega[k,l]*(districts.prop[k]-mean(districts.prop))*
+# # #           ((districts.prop[l]-mean(districts.prop)))
+# # #       }
+# # #     }
+# # #   }
+# # #   numerator <- S.sum/sum(Omega)
+# # #   auto.corr <- abs(numerator/denominator)
+# # #   ##################################################################
+# # #   #=================================Dependent Unit Sequential Technique
+# # #   frst.unt <- sample(x=c(1:3500), 1)
+# # #   frst.areal <- pts.df[frst.unt,1]
+# # #   frst.cntr <- ar.cnt(frst.unt)
+# # #   sampled <- c(frst.areal)
+# # #   CTR <- 2
+# # #   while(length(unique(sampled)) < n.dust){
+# # #     cntrdis <- crossdist(
+# # #       count.da[sampled[CTR-1],]$cntr.x,
+# # #       count.da[sampled[CTR-1],]$cntr.y,
+# # #       count.da$cntr.x, count.da$cntr.y
+# # #     )
+# # #     cntrdis <- as.vector(cntrdis)
+# # #     ###
+# # #     sampled[CTR] <- order(cntrdis)[102-CTR]
+# # #     ###
+# # #     CTR  <- CTR + 1
+# # #   }
+# # #   # sum(1*duplicated(sampled))
+# # #   sampled <- unique(sampled)
+# # #   ##################################################################
+# # #   #================================= DUST Estimation
+# # #   all.in.1 <- as.matrix(divi.pts[sampled][[1]])
+# # #   for (lis.n in 2:n.dust){
+# # #     all.in.1 <- rbind(all.in.1, as.matrix(divi.pts[sampled][[lis.n]]))
+# # #   }
+# # #   ###
+# # #   logitMod <- glm(all.in.1[,5+i] ~ all.in.1[,4]+all.in.1[,5], family="binomial")
+# # #   phat.z <- cbind(all.in.1[,5+i], predict(logitMod, type="response"))
+# # #   #RSS1 <- rankedsets(X=phat.z, m=3, s=3)
+# # #   RSS1 <- c()
+# # #   RSS2 <- c()
+# # #   for(cyc1 in 1:(n/m1)){
+# # #     for(ccy1 in 1:m1){
+# # #       sa <- sample(1:nrow(phat.z), m1, replace=T)
+# # #       ph.rss1 <- phat.z[sa,]
+# # #       ph.rss.1 <- ph.rss1[order(ph.rss1[,2], decreasing=FALSE),]
+# # #       RSS1 <- append(RSS1,ph.rss.1[ccy1,1])
+# # #     }
+# # #   }
+# # #   for(cyc2 in 1:(n/m2)){
+# # #     for(ccy2 in 1:m2){
+# # #       sa <- sample(1:nrow(phat.z), m2, replace=T)
+# # #       ph.rss2 <- phat.z[sa,]
+# # #       ph.rss.2 <- ph.rss2[order(ph.rss2[,2], decreasing=FALSE),]
+# # #       RSS2 <- append(RSS2,ph.rss.2[ccy2,1])
+# # #     }
+# # #   }
+# # #   m.dust.RSS1[i] <- mean(RSS1)
+# # #   m.dust.RSS2[i] <- mean(RSS2)
+# # #   ##################################################################
+# # #   #================================= SRS Estimation
+# # #   all.in.1srs <- as.matrix(divi.pts[[1]])
+# # #   for (lis.n in 2:100){
+# # #     all.in.1srs <- rbind(all.in.1srs, as.matrix(divi.pts[[lis.n]]))
+# # #   }
+# # #   ###
+# # #   logitModsrs <- glm(all.in.1srs[,5+i] ~ all.in.1srs[,4]+all.in.1srs[,5],
+# # #                   family="binomial")
+# # #   phat.zsrs <- cbind(all.in.1srs[,5+i], predict(logitModsrs, type="response"))
+# # #   ###
+# # #   RSS1srs <- c()
+# # #   RSS2srs <- c()
+# # #   for(cyc3 in 1:(n/m1)){
+# # #     for(ccy3 in 1:m1){
+# # #       sars <- sample(1:nrow(phat.zsrs), m1, replace=T)
+# # #       ph.rss1srs <- phat.zsrs[sars,]
+# # #       ph.rss.1srs <- ph.rss1srs[order(ph.rss1srs[,2], decreasing=FALSE),]
+# # #       RSS1srs <- append(RSS1srs,ph.rss.1srs[ccy3,1])
+# # #     }
+# # #   }
+# # #   for(cyc4 in 1:(n/m2)){
+# # #     for(ccy4 in 1:m2){
+# # #       sars <- sample(1:nrow(phat.zsrs), m2, replace=T)
+# # #       ph.rss2srs <- phat.zsrs[sars,]
+# # #       ph.rss.2srs <- ph.rss2srs[order(ph.rss2srs[,2], decreasing=FALSE),]
+# # #       RSS2srs <- append(RSS2srs,ph.rss.2srs[ccy4,1])
+# # #     }
+# # #   }
+# # #   m.srs.RSS1[i] <- mean(RSS1srs)
+# # #   m.srs.RSS2[i] <- mean(RSS2srs)
+# # #   ##################################################################
+# # #   #================================= Print R
+# # #   print(i)
+# # 
+#   
+  
+  
+
+
+
+en.date <- date()
+
+
+
+
+
+st.date
+en.date
+
+
+
+
+
+
+#save.image()
+
+
+
+
+
+
+
+#os.shutdown()
+
